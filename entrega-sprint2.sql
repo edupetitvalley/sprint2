@@ -1,4 +1,4 @@
--- Active: 1779265955794@@127.0.0.1@3306@transactions
+-- Active: 1779265955794@@127.0.0.1@3306@sprint2db
 -- Nivell 1 - Ex 1 
 -- Creamos la base de datos
 CREATE DATABASE IF NOT EXISTS transactions;
@@ -476,29 +476,16 @@ DROP FOREIGN KEY `transaction_ibfk_1`;
 
 
 CREATE TABLE IF NOT EXISTS credit_card (
--- id,
     id VARCHAR(15) PRIMARY KEY,
--- user_id,
     user_id VARCHAR(15) not NULL,
--- iban,
     iban VARCHAR(34) NOT NULL,
--- pan,
     pan VARCHAR(19) NOT NULL,
--- pin,
     pin VARCHAR(6) NOT NULL,
--- cvv,
     cvv VARCHAR(4) NOT NULL,
--- track1,
     track1 VARCHAR(100),
---     %B8383712448554646^WovsxejDpwiev^86041142?7,
--- track2,
     track2 VARCHAR(100),
---    %B7653863056044187=8007163336?3,
--- expiring_date,
     expiring_date CHAR(8) NOT NULL, -- mm/dd/yy
--- card_type,
     card_type VARCHAR(25) NOT NULL,
--- card_renewal_flag
     card_renewal_flag BOOLEAN
 );
 
@@ -642,7 +629,7 @@ select card_id, sum(declined) as numDeclined
 , CASE 
     WHEN (sum(declined) < 3) THEN "ACTIVE"  
     ELSE  "INACTIVE" 
-END as "STATE CARD"	
+    END as "STATE CARD"	
  from (
 	SELECT card_id, date(timestamp) ,
 		ROW_NUMBER() OVER (PARTITION BY card_id ORDER BY TIMESTAMP DESC) AS row_num, declined
@@ -677,15 +664,52 @@ order by sum(declined) desc;
 --     Crear subconsultes SQL per a mostrar informació sense l'ús de JOIN.
 
 
+ALTER TABLE products MODIFY COLUMN priceDollars VARCHAR(20);
+ALTER TABLE products MODIFY COLUMN costDollars VARCHAR(20);
 
-SELECT card_id,
-       DATE(timestamp),
-       ROW_NUMBER() OVER (
-           PARTITION BY card_id
-           ORDER BY TIMESTAMP DESC
-       ) AS row_num,
-       declined
-FROM transaction;
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/N1-Ex.8__products.csv'
+INTO TABLE products
+FIELDS TERMINATED BY ','
+OPTIONALLY ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES;
 
 
+UPDATE products SET priceDollars = REPLACE(priceDollars, '$', '');
+UPDATE products SET costDollars = REPLACE(costDollars, '$', '');
 
+update transaction set product_ids = replace(product_ids, " ,", ",")
+
+update transaction set product_ids = replace(product_ids, ", ", ",");
+-- 👉 Necessitem conèixer el nombre de vegades que s'ha venut cada producte.
+use sprint2db;
+CREATE TABLE transaction_products (
+    transaction_id VARCHAR(255) NOT NULL,
+    product_id INT NOT NULL,
+    PRIMARY KEY (transaction_id, product_id)
+);
+
+-- subconsulta para obtener los datos con los que rellenar la tabla puente
+-- SELECT
+--     t.card_id, t.id,
+--     t.product_ids,
+--     p.id
+-- FROM transaction t
+-- CROSS JOIN products p
+-- WHERE FIND_IN_SET(p.id, t.product_ids)
+-- ;
+
+-- ¿qué comando DML permite insertar el resultado de un SELECT dentro de una tabla existente?
+INSERT INTO transaction_products(transaction_id, product_id) 
+	SELECT t.id,
+		p.id
+	FROM transaction t
+	CROSS JOIN products p
+	WHERE FIND_IN_SET(p.id, t.product_ids)
+;
+
+DESCRIBE transaction_products;
+
+SELECT product_id, count(product_id) as unidades_vendidas from transaction_products
+GROUP BY product_id
+ORDER BY unidades_vendidas DESC;
